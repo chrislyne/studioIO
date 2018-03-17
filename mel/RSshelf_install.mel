@@ -1,0 +1,73 @@
+global proc AddIcons(string $shelfName)
+{
+    //get icon path
+    string $allparts[];
+    string $separator = ( `about -nt` ) ? ";" : ":";
+    tokenize( getenv("XBMLANGPATH"), $separator, $allparts );
+    //copy icons
+    string $icons[] = {"abc_rndr.png","abc_publishModel.png","abc_reassignShader.png","abc_anim.png","abc_exportAnimation.png","abc_importAnimation.png","abc_exportCamera"};
+    for($item in $icons)
+    {
+        string $srcWindows = ("Z:/Job_3/System/Deployment/mel/icons/"+$item);
+        string $destWindows = ($allparts[1]+"/"+$item);
+        sysFile -copy $destWindows $srcWindows;
+    }
+    
+    //add icons to shelf
+    shelfButton -rpt false -width 16 -height 34 -i1 "abc_UV.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
+    shelfButton -rpt true -i1 "exportForTexturing.png" -l "exportForTexturing" -c "source exportForTexturing;exportForTexturing;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt false -width 16 -height 34 -i1 "abc_REF.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
+    shelfButton -rpt true -i1 "abc_publishModel.png" -l "abc_publishModel" -c "source abc_publishModel;abc_publishModel;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt false -width 16 -height 34 -i1 "abc_anim.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
+    shelfButton -rpt true -i1 "abc_exportAnimation.png" -l "abc_exportAnimation" -c "source abc_exportAnimation;abc_exportAnimation;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt true -i1 "abc_exportCamera.png" -l "abc_exportCamera" -c "source abc_exportCamera;abc_exportCamera;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt false -width 16 -height 34 -i1 "abc_rndr.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
+    shelfButton -rpt true -i1 "abc_importAnimation.png" -l "abc_importAnimation" -c "source abc_importAnimation;abc_importAnimation;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt true -i1 "abc_reassignShader.png" -l "abc_reassignShader" -c "source abc_reassignShaders;abc_reassignShaders;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    
+    
+}
+
+//update name and run
+global proc CheckText()
+{
+   $shelfName = `textField -q -text nameText`;
+   AddIcons($shelfName);
+}
+
+global proc abc_install()
+{
+    if (`window -exists abcInstallWindow`) deleteUI abcInstallWindow;
+    window -w 300 -h 100 -title "abc Install Window" abcInstallWindow;
+        formLayout abcForm;
+             text -label "Shelf" textLabel;
+             textField -w 250 -tx "Custom" nameText;
+             button -l "Install" -h 50 -c ("CheckText()") btn1;
+             button -l "Close" -h 50 -c ("deleteUI abcInstallWindow") btn2 ;
+        formLayout -edit
+             -af textLabel top 15
+             -af textLabel left 10 
+             -af nameText top 10
+             -ac nameText left 10 textLabel
+             -af nameText right 10 
+             -af btn1 bottom 0
+             -af btn1 left 0
+             -ap btn1 right 0 50
+             -af btn2 bottom 0
+             -ac btn2 left 0 btn1
+             -af btn2 right 0 
+
+    abcForm;
+    
+    string $shelfName = "";
+    
+    //get current tab
+    string $names[] = `layout -q -ca ShelfLayout`;
+    int $shelfIndex = `shelfTabLayout -q -selectTabIndex ShelfLayout`;
+    
+    //set text
+    string $selectionString = ($names[$shelfIndex-1]);
+    textField -edit -tx ($selectionString) nameText;
+
+    showWindow abcInstallWindow;
+}
