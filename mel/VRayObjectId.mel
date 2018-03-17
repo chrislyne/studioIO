@@ -1,0 +1,32 @@
+global proc VRayObjectId(){
+
+	if (`window -ex VRayIDWindow` == 1){
+		deleteUI VRayIDWindow;
+	} 
+	window -rtf true -title "VRay ID" VRayIDWindow;
+
+	columnLayout;
+
+	intSliderGrp -label "ID" -field true -min 0 -max 20 -value 4 IDSlider;
+
+	button -c assignID -label "Apply";
+
+	showWindow VRayIDWindow;
+}
+
+global proc assignID (){
+	    
+	    int $intID = `intSliderGrp -q -value "IDSlider"`;
+	    
+	    pickWalk -d down;
+	    string $sel[] = `ls -sl`;
+	    //string $sel[] = `listRelatives -typ "shape"`;
+
+		for( $item in $sel)
+		{
+		    vray addAttributesFromGroup $item vray_objectID 1;
+			vrayAddAttr $item vrayObjectID;
+			setAttr ( $item + ".vrayObjectID") $intID;
+		}
+	
+}

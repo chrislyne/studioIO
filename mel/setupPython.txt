@@ -1,0 +1,6 @@
+import sys
+sys.path.append('Z:/Job_3/System/Deployment/mel')
+
+import RS_AOVView
+reload(RS_AOVView)
+RS_AOVView.RS_AOVView()

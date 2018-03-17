@@ -1,0 +1,105 @@
+global proc RSProxyCTRL(){
+
+	if (`window -ex RSIDWindow` == 1){
+		deleteUI RSIDWindow;
+	} 
+	window -rtf true -title "Redshift Proxy Control" RSIDWindow;
+
+	columnLayout -columnAttach "both" 5 -rowSpacing 10 -columnWidth 400;
+	
+	text -label "Display Control" -align "left" -fn "boldLabelFont" -h 40;
+    
+    radioButtonGrp -numberOfRadioButtons 3
+    -label "Display Mode  " -vr -labelArray3 "Bounding Box" "Preview Mesh" "Linked Mesh" -cc changeDisplayMode displayMode;
+    
+	intSliderGrp -label "Display Percentage  " -field true -min 1 -max 100 -value 100 -cc changeDisplayPercentage IDSlider;
+	
+	//separator -height 20 -style "in";
+
+	button -c displayControl -label "Apply";
+	
+	separator -height 20 -style "in";
+	
+	text -label "Overrides" -align "left" -fn "boldLabelFont" -h 20;
+	checkBoxGrp
+	    -vr
+	    -label ""
+        -numberOfCheckBoxes 3
+        -labelArray3 "Object ID" "Visibility & Matte" "Tessellation & Displacement" overrideBoxes;
+	
+	button -c setOverrides -label "Apply";
+	separator -height 20 -style "in";
+	
+	text -label "Duplicate RS Proxy" -align "left" -fn "boldLabelFont" -h 40;
+	button -c duplicateRSProxy -label "Duplicate";
+	
+	separator -height 20 -style "in";
+
+	showWindow RSIDWindow;
+}
+
+global proc displayControl (){
+       changeDisplayMode;
+       changeDisplayPercentage;
+}
+
+global proc changeDisplayMode (){
+	    
+	    string $sel[] = `ls -sl`;
+	    int $intMode = (`radioButtonGrp -q -sl "displayMode"`)-1;
+	    
+	    pickWalk -d down;
+        string $type[] = `listConnections -type RedshiftProxyMesh`;
+
+        for( $item in $type)
+        {
+            setAttr ($item+".displayMode") $intMode;
+        }
+        select -r $sel;
+}
+
+global proc changeDisplayPercentage (){
+    
+        string $sel[] = `ls -sl`;
+	    int $intID = `intSliderGrp -q -value "IDSlider"`;
+	    
+	    pickWalk -d down;
+        string $type[] = `listConnections -type RedshiftProxyMesh`;
+
+        for( $item in $type)
+        {
+            setAttr ($item+".displayPercent") $intID;
+        }
+        select -r $sel;
+}
+
+global proc duplicateRSProxy (){
+	    
+	    pickWalk -d down;
+        
+        string $sel[] = `ls -sl`;
+        for( $item in $sel)
+        {
+            duplicate -upstreamNodes;
+        }        
+}
+
+global proc setOverrides (){
+	    
+	    string $sel[] = `ls -sl`;
+	    
+	    pickWalk -d down;
+        string $type[] = `listConnections -type RedshiftProxyMesh`;
+        
+        int $IDBoxValue = `checkBoxGrp -q -v1 "overrideBoxes"`;
+        int $visibilityBoxValue = `checkBoxGrp -q -v2 "overrideBoxes"`;
+        int $tessellationBoxValue = `checkBoxGrp -q -v3 "overrideBoxes"`;
+
+        for( $item in $type)
+        {
+            setAttr ($item+".objectIdMode") $IDBoxValue;
+            setAttr ($item+".visibilityMode") $visibilityBoxValue;
+            setAttr ($item+".tessellationMode") $tessellationBoxValue;
+        }
+        select -r $sel;
+}

@@ -1,0 +1,167 @@
+//Complete Dialog
+global proc completeImportShaderDialog(int $numberOfFiles, int $numberOfMultiShaders, int $shadersAssignedCount)
+{
+    //nice display message
+    string $message = "Imported " + $numberOfFiles + " materials.\n\nSkipped "+$numberOfMultiShaders+" missing files.\n\nAssigned materials to "+$shadersAssignedCount+" objects.";
+    
+    //create dialog
+    $response = `confirmDialog  -title "Completed!" 
+                                -message $message
+                                -button "Okay" 
+                                -button "Close"
+                                -defaultButton "Okay"
+                                -cancelButton "Close"
+                                -dismissString "Close"`;   
+    }
+
+//reassign shaders
+global proc importAndAssignShaders()
+{
+    string $grpSel[] = `ls -sl`;
+    select -hi $grpSel;
+    
+    if (`namespace -exists "TEMP"` == 0)
+    {
+        namespace -add "TEMP";
+    }
+    
+    
+    string $sel[] = `ls -sl -l`;
+    if (`size $sel` > 0)
+    {
+        string $shaderPaths[];
+        clear $shaderPaths;
+        string $allNamespaces[];
+        clear $allNamespaces;
+        
+        string $tempNamespace = "";
+        
+        int $importCount = 0;
+        int $importFailCount = 0;
+        int $shadersAssignedCount = 0;
+        
+        for( $item in $sel)
+        {
+            //check if attributes exist
+            if ((`attributeExists "alembicName" $item`) && (`attributeExists "material" $item`))
+            {
+                //get shader paths
+                string $alembicName = `getAttr ($item+".alembicName")`;
+                string $newMaterial = `getAttr ($item+".material")`;
+                
+                $shaderPaths[`size $shaderPaths`] = ($alembicName+"."+$newMaterial);
+            }
+        }
+        
+        //remove duplicate shader paths
+        string $shortShaderPath[] = `stringArrayRemoveDuplicates($shaderPaths)`;
+        for( $item in $shortShaderPath)
+        {
+            string $buffer[];
+            $numTokens = `tokenize $item "." $buffer`;
+            string $alembicName = $buffer[0];
+            string $newMaterial = $buffer[1];
+            //process namespaces
+            string $materialFilename = substituteAllString($newMaterial, ":", "_");
+            
+            $allNamespaces[`size $allNamespaces`] = ($alembicName);
+            
+            //import file
+            if(`radioButton -q -select radio1`)
+            {
+                string $workspace = `workspace -q -fullName`;
+                string $fileToOpen = ($workspace + "/renderData/alembicShaders/"+$alembicName+"/"+$alembicName+"_"+$materialFilename+".mb");
+                if (`filetest -f $fileToOpen` == 1)
+                {
+                    file -import -type "mayaBinary"  -ignoreVersion -mergeNamespacesOnClash true -namespace ("TEMP:"+($alembicName)) -options "v=0;"  -pr $fileToOpen;
+                    $importCount += 1;
+                    rename ("TEMP:"+$alembicName+":"+$materialFilename) ("TEMP:"+$alembicName+"_"+$materialFilename) ;
+                    $tempNamespace = "TEMP:";
+                }
+                else
+                {
+                    $importFailCount += 1;
+                }
+            }
+        }
+  
+        //assign shader
+        for( $item in $sel)
+        {
+            if ((`attributeExists "alembicName" $item`) && (`attributeExists "material" $item`))
+            {
+                string $alembicName = `getAttr ($item+".alembicName")`;
+                string $newMaterial = `getAttr ($item+".material")`;
+                if($newMaterial != "initialShadingGroup")
+                {
+                     if(`objExists ($tempNamespace+($alembicName)+"_"+$newMaterial)`)
+                    {
+                        sets -e -nw -forceElement ($tempNamespace+($alembicName)+"_"+$newMaterial) $item;
+                        $shadersAssignedCount += 1;
+                        if (`namespace -exists $alembicName`)
+                        {
+                            namespace -f -mv $alembicName ":";
+                            namespace -rm $alembicName;
+                        }
+                    }
+                }
+            }
+        }
+        
+        //remove unused shading nodes
+        if(`radioButton -q -select radio1`)
+        {
+            MLdeleteUnused();
+        }
+        
+        //remove namespace
+        string $shortNamespaces[] = `stringArrayRemoveDuplicates($allNamespaces)`;
+        for( $item in $shortNamespaces)
+        {
+            if (`namespace -exists "TEMP"`)
+            {
+                namespace -f -mv "TEMP" ":";
+                namespace -rm "TEMP";
+            }
+            
+        }
+        completeImportShaderDialog($importCount,$importFailCount, $shadersAssignedCount);
+        
+    }
+    else
+    {
+        warning ("nothing selected");
+    }
+}
+//create UI
+global proc abc_reassignShaders()
+{
+    if (`window -exists abcShaderImportWindow`) deleteUI abcShaderImportWindow;
+    window -w 300 -h 100 -title "abc Shader Import Window"  abcShaderImportWindow;
+        formLayout importShaderForm;
+            text -label "Assignment" textLabel;
+            radioCollection radioC;
+            radioButton -label "Import shaders" -select radio1;
+            radioButton -label "Use existing scene shaders" radio2;
+            
+            button -l "Assign" -h 50 -c ("importAndAssignShaders()")  Btn1;
+            button -l "Close" -h 50 -c ("deleteUI abcShaderImportWindow")  Btn2 ;
+        formLayout  -edit
+                    -af textLabel top 15
+                    -af textLabel left 10 
+                    -af radio1 top 12
+                    -ac radio1 left 10 textLabel
+                    -ac radio2 top 10 radio1
+                    -ac radio2 left 10 textLabel
+                    -af Btn1 bottom 0
+                    -af Btn1 left 0
+                    -ap Btn1 right 0 50
+                    -af Btn2 bottom 0
+                    -ac Btn2 left 0 Btn1
+                    -af Btn2 right 0 
+
+    importShaderForm;
+    showWindow abcShaderImportWindow;
+}
+
+//abc_reassignShaders();

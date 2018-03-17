@@ -1,0 +1,13 @@
+global proc removeTurtle(){
+
+	unloadPlugin -f "Turtle";
+
+	select -r -ne TurtleDefaultBakeLayer ;
+	string $sel[] = `ls -sl`;
+	if ( `size($sel)` > 0 )
+	{
+    	lockNode -l 0 $sel[0];
+    	delete $sel[0];
+	}
+	deleteShelfTab("TURTLE");
+}

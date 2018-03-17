@@ -1,0 +1,372 @@
+//publish model
+//remove namespace
+global proc removeSceneNamespaces()
+{   
+    namespace -set ":";
+    string $allNamespaces[] = `namespaceInfo -lon`;
+    while (`size $allNamespaces` > 2)
+    {
+        //remove namespaces in scene
+        $allNamespaces = `namespaceInfo -lon`;
+        for( $item in $allNamespaces)
+        {
+            string $namespaceName = ":" + $item;
+            if ($namespaceName != ":UI" && $namespaceName != ":shared")
+            {
+                namespace -f -mv $namespaceName ":";
+                namespace -rm $namespaceName;
+            }
+        }
+    }
+} 
+
+//export alembic
+global proc string makeAlembic(string $refName, string $publishString)
+{
+    if (`exists AbcExport`) 
+    {
+        sysFile -makeDir ((`workspace -q -rd` )+"cache/alembic/models");
+        AbcExport -verbose -j ("-frameRange 1 1 -attr material -attr alembicName -stripNamespaces -uvWrite -worldSpace -writeVisibility -writeUVSets -dataFormat ogawa -root " + $publishString +" -file models/"+$refName+".abc");
+        return ((`workspace -q -rd` )+"cache/alembic/models/"+$refName+".abc");
+    }
+    else
+    {
+        warning("AbcExport plugin not loaded");
+        return ("Alembic plugin not loaded");
+    }
+}
+
+//make reference .mb
+global proc string[] makeRef(string $refName, string $publishString)
+{
+    string $refFileName  = $refName+".mb";
+    
+    //set markers
+    setAttr (($publishString) + ".useOutlinerColor") 1;
+    setAttr (($publishString)+ ".outlinerColorR") 0.25;
+    setAttr (($publishString)+ ".outlinerColorG") 0.8;
+    setAttr (($publishString) + ".outlinerColorB") 0.25;
+    AEdagNodeCommonRefreshOutliners();
+    
+    if(`attributeExists "publishName" $publishString` == 0)
+    {
+        addAttr -ln "publishName"  -dt "string"  $publishString;
+        setAttr -e-keyable true ($publishString+".publishName");
+    }
+    setAttr -type "string" ($publishString+".publishName") $refName;
+    
+    //get parent folder
+    string $scenePath = `file -q -sn`;
+    string $folders[];
+    clear $folders;
+    tokenize $scenePath "/" $folders;
+    int $folderCount = `size $folders`;
+    string $parentFolder = "";
+    for ($i=0;$i<$folderCount-2;$i++)
+    {
+        $parentFolder += ($folders[$i]+"/");
+    }
+    
+    //output name
+    string $pathName = $parentFolder+$refFileName;
+    string $backupName = "";
+    //check for existing file
+    if (`filetest -e $pathName` == 1)
+    {
+        //if it exists, increment and back it up
+        string $backupFolder = $parentFolder+$folders[$folderCount-2]+"/backup";
+        sysFile -makeDir $backupFolder;
+        int $count = 1;
+        int $backupExists = `filetest -e ($backupFolder+"/"+$refFileName+$count)`;
+        while ($backupExists == 1)
+        {    
+            $count += 1;
+            $backupExists = `filetest -e ($backupFolder+"/"+$refFileName+$count)`;
+        }
+        $backupName = ($backupFolder+"/"+$refFileName+$count);
+        sysFile -copy $backupName $pathName;
+    }
+    
+    //export .mb REF
+    file -force -options "v=0;" -typ "mayaBinary" -pr -es $pathName;
+    
+    string $logOutput[];
+    $logOutput[0] = $pathName;
+    $logOutput[1] = $scenePath;
+    $logOutput[2] = $backupName;
+    
+    return ($logOutput);
+} 
+
+//publish shaders
+global proc int[] exportShaders(string $path)
+{
+    //get workspace
+    int $shaderCount = 0;
+    int $multiShaderCount = 0;
+    int $returnInt[];
+    string $workspace = `workspace -q -fullName`;
+    string $workspaceBuffer[];
+    clear $workspaceBuffer;
+    $numTokens2 = `tokenize $workspace "/" $workspaceBuffer`;
+    int $workspaceSize = `size $workspaceBuffer`+1;
+
+    string $publishName = $path;
+    string $allGeo = "";
+    
+    //select hierarchy
+    string $grpSel[] = `ls -sl`;
+    select -hi $grpSel;
+    
+    string $sel[] = `ls -sl -l`;
+    if (`size $sel` > 0)
+    {
+        for( $item in $sel)
+        {
+            if(`objectType -isType "transform" $item` == 1)
+            {
+                string $rel[] = `listRelatives -s -f $item`;
+                if (`size ($rel)` > 0)
+                {
+                    string $SG[] = `listConnections -type "shadingEngine" $rel`;
+                    if (`size $SG` > 0)
+                    {
+                        //add to string 
+                        $allGeo +=  ("-root "+$item+" ");
+                        
+                        //list materials
+                        string $shapes[] = `listRelatives -pa $item`;
+                        
+                        string $myMaterial[] = `listConnections -type "shadingEngine" $shapes`;
+                        //string $shader[] = stringArrayRemoveDuplicates(ls("-mat",listConnections($myMaterial)));
+                        string $material = $myMaterial[0]; 
+                        int $countMaterials = `size $myMaterial`;
+                        
+                        if($countMaterials > 1)
+                        {
+                            string $usableMaterials[];
+                            for ($mat in $myMaterial)
+                            {
+                                if($mat != "initialShadingGroup")
+                                {
+                                    $usableMaterials[`size $usableMaterials`] = $mat;
+                                }
+                                
+                            }
+                            string $shortUsableMaterials[] = stringArrayRemoveDuplicates($usableMaterials);
+                            int $shortSize = `size $shortUsableMaterials`;
+                            if($shortSize > 1)
+                            {
+                                warning ($item + " has more than one material assigned and may produce unexpected results...fool");
+                                setAttr (($item) + ".useOutlinerColor") 1;
+                                setAttr (($item)+ ".outlinerColorR") 1;
+                                setAttr (($item)+ ".outlinerColorG") 0;
+                                setAttr (($item) + ".outlinerColorB") 0;
+                                $multiShaderCount += 1;
+                            }
+                            $material = $shortUsableMaterials[0];
+                        }
+                        
+                        //process namespaces
+                        string $materialFilename = substituteAllString($material, ":", "_");
+                        
+                        //add attributes
+                        if ((`attributeExists "alembicName" $item`) == false)
+                        {
+                            addAttr -ln "alembicName"  -dt "string"  $item;
+                        }
+                        if ((`attributeExists "material" $item`) == false)
+                        {
+                            addAttr -ln "material"  -dt "string"  $item;
+                        }
+                        setAttr -e-keyable true ($item+".material");
+                        setAttr -type "string" ($item+".material") $material;
+                        setAttr -e-keyable true ($item+".alembicName");
+                        setAttr -type "string" ($item+".alembicName") $publishName;
+                        
+                        //export shader
+                        if (`objExists $material`)
+                        {
+                            select -r -noExpand $material;
+                            file -force -options "v=0;" -typ "mayaBinary" -pr -es ($workspace+"/renderData/alembicShaders/"+$publishName+"/"+$publishName+"_"+$materialFilename+".mb");
+                            $shaderCount += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        warning ("nothing selected");
+    }
+    $returnInt[0] = $shaderCount;
+    $returnInt[1] = $multiShaderCount;
+    return ($returnInt);
+}
+
+proc writeLog(string $refFileName, string $pathName, string $scenePath, string $backupName,string $shaderExport, string $alembicOutput)
+{
+    //log
+    //get parent folder
+    string $folders[];
+    clear $folders;
+    tokenize $scenePath "/" $folders;
+    int $folderCount = `size $folders`;
+    string $parentFolder = "";
+    for ($i=0;$i<$folderCount-2;$i++)
+    {
+        $parentFolder += ($folders[$i]+"/");
+    }
+    //machine name 
+    $computer = `getenv "COMPUTERNAME"`;
+    // Create A String Array With Test Data
+    string $filePath = $parentFolder+$folders[$folderCount-2]+"/"+$refFileName+".mb.log" ;
+    $fileId = `fopen $filePath "a"` ;
+    // Print Array To File
+    fprint $fileId (`date` +"\nPublished to        "+$pathName +"\nPublished from      "+$scenePath+"\nBackup file         "+$backupName+$alembicOutput+"\nShaders Exported    "+$shaderExport+"\nMachine             "+$computer+"\n\n") ;
+    // Close File
+    fclose $fileId ;
+}
+//set text field
+proc setText()
+{
+    string $publishName = "";
+    
+    //check if publish name exists
+    string $sel[] = `ls -sl`;
+    if(`attributeExists "publishName" ($sel[0])`)
+    {
+        $publishName = (`getAttr ($sel[0]+".publishName")`);
+    }
+    else
+    {
+        //get filename
+        string $filename = `file -q -sn -shn`;
+        string $buffer[];
+        $numTokens = `tokenize $filename "." $buffer`;
+        string $parts[];
+        $numParts = `tokenize $buffer[0] "_" $parts`;
+        $publishName =  ($parts[0] + "_REF");
+    }
+    //set text
+    textField -edit -tx ($publishName) nameText;
+}
+
+//Complete Dialog
+global proc completeDialog(int $numberOfFiles, int $numberOfMultiShaders, int $alembicExported)
+{
+    string $alembicMessage = "";
+    if($alembicExported == 1)
+    {
+        $alembicMessage = "\n\nAlembic Export successful";
+    }
+    //nice display message
+    string $message = "Exported " + $numberOfFiles + " materials with "+$numberOfMultiShaders+" warnings"+$alembicMessage;
+    if($numberOfFiles == 1)
+    {
+        $message = "Exported " + $numberOfFiles + " file";
+    }
+    
+    //create dialog
+    $response = `confirmDialog -title "Completed!" 
+                          -message $message
+                          -button "Okay" 
+                          -button "Close"
+                          -defaultButton "Okay"
+                          -cancelButton "Close"
+                          -dismissString "Close"`;   
+    if( $response == "Close" ) 
+    {
+        deleteUI shaderExportWindow;
+    }
+}
+
+//update name and run
+global proc PublishModelCheckText()
+{
+    string $sel[] = `ls -sl`;
+    int $selSize = `size $sel`;
+    if ($selSize == 1)
+    {
+        string $publishString = $sel[0];
+        removeSceneNamespaces;
+        $publishName = `textField -q -text nameText`;
+        $tempSelect = `ls -sl`;
+       
+        //shaders
+        $exportShaders = `checkBox -q -v shadersCheck`;
+        $exportAlembic = `checkBox -q -v alembicCheck`;
+        int $shadersEported[];
+        int $alembicExported = 0;
+        clear $shadersEported;
+        if($exportShaders == 1)
+        {
+            int $shadersExport[] = exportShaders($publishName);
+            $shadersEported = $shadersExport;
+        }
+        //alembic
+        string $alembicLog = "";
+        if($exportAlembic == 1)
+        {
+            string $alembicExport = makeAlembic($publishName, $publishString);
+            $alembicExported = 1;
+            $alembicLog = ("\nAlembic             "+$alembicExport);
+        }
+        //binary
+        select -r $tempSelect;
+        string $makeRefLog[] = makeRef($publishName, $publishString);
+        //log
+        writeLog($publishName,$makeRefLog[0],$makeRefLog[1],$makeRefLog[2],$shadersEported[0],$alembicLog);
+        
+        completeDialog($shadersEported[0], $shadersEported[1],$alembicExported);
+        
+    }
+    else if($selSize > 1)
+    {
+        error("select only ONE object to publish");
+    }
+    else
+    {
+        error("select an object to publish");
+    }
+}
+
+global proc abc_publishModel()
+{
+    if (`window -exists shaderExportWindow`) deleteUI shaderExportWindow;
+    window -w 300 -h 100 -title "Publish Reference Window" shaderExportWindow ;
+        formLayout publishForm;
+             text -label "Publish Name" textLabel;
+             textField -w 250 nameText;
+             iconTextButton -style "iconOnly" -image1 "refresh.png" -c "setText()" reloadButton;
+             checkBox -l "Export Shaders" -v 1 shadersCheck;
+             checkBox -l "Export Alembic" -v 1 alembicCheck;
+             button -l "Publish" -h 50 -c ("PublishModelCheckText()") btn1;
+             button -l "Close" -h 50 -c ("deleteUI shaderExportWindow") btn2 ;
+        formLayout -edit
+             -af textLabel top 15
+             -af textLabel left 10 
+             -af reloadButton top 10
+             -af reloadButton right 10 
+             -af nameText top 10
+             -ac nameText left 10 textLabel
+             -ac nameText right 10 reloadButton
+             -ac shadersCheck top 15 textLabel
+             -af shadersCheck left 90
+             -ac alembicCheck top 15 shadersCheck
+             -af alembicCheck left 90
+             -af btn1 bottom 0
+             -af btn1 left 0
+             -ap btn1 right 0 50
+             -af btn2 bottom 0
+             -ac btn2 left 0 btn1
+             -af btn2 right 0 
+
+    publishForm;
+    setText();
+    showWindow shaderExportWindow;
+}
+//abc_publishModel();
+
+

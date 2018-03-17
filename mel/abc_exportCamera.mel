@@ -1,0 +1,144 @@
+//export camera
+
+//rename camera 
+global proc string renameCamera(string $selectionCamera)
+{
+    //get range
+    float $startFrame = `playbackOptions -q -minTime`;
+    float $endFrame = `playbackOptions -q -maxTime`;
+    
+    //get filename
+    string $filename = `file -q -sn -shn`;
+    string $buffer[];
+    $numTokens = `tokenize $filename "." $buffer`;
+    
+    string $shotNameParts[];
+    $shotNameTokens = `tokenize $filename "_" $shotNameParts`;
+    $shotName = $shotNameParts[0];
+    
+    string $newName = `rename $selectionCamera ($shotName+"_s"+$startFrame+"_e"+$endFrame)` ;
+    return ($newName);
+}
+
+
+global proc publishCamera(string $path, string $cameraName)
+{
+    //get workspace
+    string $workspace = `workspace -q -fullName`;
+    string $workspaceBuffer[];
+    clear $workspaceBuffer;
+    $numTokens2 = `tokenize $workspace "/" $workspaceBuffer`;
+    int $workspaceSize = `size $workspaceBuffer`+1;
+    
+    //get filename
+    string $filename = `file -q -sn`;
+    string $buffer[];
+    $numTokens = `tokenize $filename "/" $buffer`;
+    
+    //get relative path
+    string $relativePath = "";
+    for( $i=$workspaceSize; $i<(`size $buffer`-1); ++$i )
+    {
+        $relativePath += ($buffer[$i]+"/");
+    }
+    
+    //get frame range
+    float $startFrame = `playbackOptions -q -minTime`;
+    float $endFrame = `playbackOptions -q -maxTime`;
+    
+    //published file name    
+    string $exportString = (" -root "+$cameraName);
+    
+    string $folderPath = ($workspace+"/cache/alembic/"+$relativePath);
+    sysFile -makeDir $folderPath ;
+    
+    if (`exists AbcExport`) 
+    {
+        AbcExport -verbose -j ("-frameRange "+$startFrame+" "+$endFrame+" -stripNamespaces -worldSpace -dataFormat ogawa"+$exportString+" -file \""+$workspace+"/cache/alembic/"+$relativePath+"/"+$path+".abc\"");
+        //set colours
+        setAttr (($cameraName) + ".useOutlinerColor") 1;
+        setAttr (($cameraName)+ ".outlinerColorR") 1;
+        setAttr (($cameraName)+ ".outlinerColorG") 0.0;
+        setAttr (($cameraName) + ".outlinerColorB") 0.4;
+        AEdagNodeCommonRefreshOutliners();
+    }
+    else
+    {
+        warning("AbcExport plugin not loaded");
+    }
+}
+
+global proc string[] listAllCameras()
+{
+    string $listAllCameras[] = `listCameras -p`;
+    string $cleanList[];
+    for ($cam in $listAllCameras)
+    {
+        if ($cam != "persp")
+        {
+             $cleanList[`size $cleanList`] = $cam;
+        }
+    }
+    return $cleanList;
+}
+
+//update name and run
+global proc CheckText()
+{
+   $publishName = `textField -q -text nameText`;
+   string $selectionCamera = `optionMenu -q -v cameraSelection`;
+   
+   if($selectionCamera != "")
+   {
+       string $newCamName = renameCamera($selectionCamera);
+       publishCamera($publishName,$newCamName);
+   }
+   
+   
+}
+
+global proc abc_exportCamera()
+{
+    if (`window -exists abcCamExportWindow`) deleteUI abcCamExportWindow;
+    window -w 300 -h 200 -title "abc Camera Export Window" abcCamExportWindow;
+        formLayout abcForm;
+             text -label "Publish Name" textLabel;
+             textField -w 250 nameText;
+             text -label "Camera" cameraLabel;
+             string $allCameras[] = listAllCameras();
+             optionMenu cameraSelection;
+             for ($cam in $allCameras)
+             {
+                 menuItem -label $cam;
+             }
+               
+             button -l "Publish" -h 50 -c ("CheckText()") Button1;
+             button -l "Close" -h 50 -c ("deleteUI abcCamExportWindow") Button2 ;
+        formLayout   -edit
+                     -af textLabel top 15
+                     -af textLabel left 10 
+                     -af nameText top 10
+                     -ac nameText left 10 textLabel
+                     -af nameText right 10 
+                     -ac cameraLabel top 20 textLabel
+                     -af cameraLabel left 10
+                     -ac cameraSelection top 20 textLabel
+                     -ac cameraSelection left 40 cameraLabel
+                     -af cameraSelection right 10 
+                     -af Button1 bottom 0
+                     -af Button1 left 0
+                     -ap Button1 right 0 50
+                     -af Button2 bottom 0
+                     -ac Button2 left 0 Button1
+                     -af Button2 right 0 
+    abcForm;
+    
+    //get filename
+    string $filename = `file -q -sn -shn`;
+    string $buffer[];
+    $numTokens = `tokenize $filename "." $buffer`;
+
+    textField -edit -tx ($buffer[0]+"_CAMERA") nameText;
+    showWindow abcCamExportWindow;
+}
+//abc_exportCamera();

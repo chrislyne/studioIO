@@ -1,0 +1,18 @@
+global proc geoMatte()
+{
+
+    string $sel[] = `ls -sl`;
+    for( $item in $sel)
+    {
+        string $shapes[] = `listRelatives -s -path $item`;
+        for( $shape in $shapes)
+        {
+        if (`attributeExists "rsMatteEnable" $shape`) 
+            {
+            editRenderLayerAdjustment ($shape+".rsMatteEnable");
+            setAttr ($shape+".rsMatteEnable") 1;
+            setAttr ($shape+".rsMatteAlpha") 0;
+            }
+        }
+    }
+}

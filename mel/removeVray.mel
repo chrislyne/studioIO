@@ -1,0 +1,24 @@
+//remove vray
+global proc removeVray()
+{
+    if (`attributeExists "postMel" "defaultRenderGlobals"`)
+    {
+        setAttr -type "string" defaultRenderGlobals.postMel "";
+    }
+    if (`attributeExists "preMel" "defaultRenderGlobals"`)
+    {
+        setAttr -type "string" defaultRenderGlobals.preMel "";
+    }
+    
+    string $vrayNodes[] = `ls "*camera2*"`;
+    string $VRayNodes1[] = `ls "*VRay*"`;
+    
+    if(`size $vrayNodes` > 0)
+    {
+        delete $vrayNodes;
+    }
+    if(`size $VRayNodes1` > 0)
+    {
+        delete $vrayNodes;
+    }
+}

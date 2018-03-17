@@ -1,0 +1,88 @@
+// TODO
+/*
+Reformat render path
+
+
+*/
+
+
+global proc RSFresnel(){
+
+	//Check if Redshift is loaded
+  	string $evalCommand="rsCreateAov";
+  	if (`exists $evalCommand`) 
+  	{
+
+		string $RSfresnelShader;
+
+		if (`objExists RSfresnel`)
+		{
+		    select -r RSfresnel;
+		    $RSfresnelShaders = `ls -sl`;
+		    $RSfresnelShader = $RSfresnelShaders[0];
+		}
+		else
+		{
+		    //create nodes
+		    $RSfresnelShader = `shadingNode -name "RSfresnel" -asShader RedshiftArchitectural`;
+		    $RSfresnelTexture = `shadingNode -asUtility RedshiftFresnel`;
+		    //assign shader values
+		    setAttr ($RSfresnelShader + ".diffuse") -type double3 0 0 0 ;
+		    setAttr ($RSfresnelShader + ".reflectivity") 0;
+		    setAttr ($RSfresnelShader + ".ao_on") 1;
+		    setAttr ($RSfresnelShader + ".ao_samples") 1024;
+		    setAttr ($RSfresnelShader + ".ao_applyToIncandescence") 0;
+		    setAttr ($RSfresnelShader + ".ao_distance") 2;
+		    setAttr ($RSfresnelShader + ".ao_dark") -type double3 0 0 0 ;
+		    //assign texture values
+		    setAttr ($RSfresnelTexture + ".fresnel_useior") 0;
+		    setAttr ($RSfresnelTexture + ".user_curve") 5.069;
+		    //create network
+		    connectAttr -force ($RSfresnelTexture+".outColor") ($RSfresnelShader+".additional_color");
+		}
+
+		$currentLayer = `editRenderLayerGlobals -q -currentRenderLayer`;
+		hookShaderOverride($currentLayer, "", $RSfresnelShader);
+		//create AOVs
+		$occlusionAOV = `rsCreateAov -type "Ambient Occlusion"`;
+		$fresnelAOV = `rsCreateAov -type "Emission"`;
+		setAttr -type "string" ($fresnelAOV + ".name") "Fresnel";
+		//render layer overide
+		setAttr ($occlusionAOV + ".enabled") 0;
+		setAttr ($fresnelAOV + ".enabled") 0;
+		editRenderLayerAdjustment ($occlusionAOV + ".enabled") ;
+		editRenderLayerAdjustment ($fresnelAOV + ".enabled");
+		setAttr ($occlusionAOV + ".enabled") 1;
+		setAttr ($fresnelAOV + ".enabled") 1;
+
+		string $evalCommand="redshiftUpdateActiveAovList";
+	    if (`exists $evalCommand`) 
+	    {
+	        eval ("redshiftUpdateActiveAovList()");
+	    }
+		//set render globals
+		editRenderLayerAdjustment "redshiftOptions.primaryGIEngine";
+		editRenderLayerAdjustment "redshiftOptions.secondaryGIEngine";
+		setAttr "redshiftOptions.primaryGIEngine" 0;
+		setAttr "redshiftOptions.secondaryGIEngine" 0;
+		//hide lights
+		$RSlights = `ls -type RedshiftPhysicalLight`;
+		for( $item in $RSlights)
+		{
+		    editRenderLayerAdjustment ($item + ".on");
+		    setAttr ($item + ".on") 0;
+		}
+		$RSlights = `ls -type RedshiftDomeLight`;
+		for( $item in $RSlights)
+		{
+		    editRenderLayerAdjustment ($item + ".on");
+		    setAttr ($item + ".on") 0;
+		}
+
+	}
+  	else
+  	{
+    	error ("Redshift Not Loaded");
+  	}
+
+}

@@ -1,0 +1,78 @@
+//reassign shaders
+global proc abc_reassignShaders()
+{
+    string $grpSel[] = `ls -sl`;
+    select -hi $grpSel;
+    
+    string $sel[] = `ls -sl -l`;
+    if (`size $sel` > 0)
+    {
+        string $shaderPaths[];
+        clear $shaderPaths;
+        string $allNamespaces[];
+        clear $allNamespaces;
+        
+        for( $item in $sel)
+        {
+            //check if attributes exist
+            if ((`attributeExists "alembicName" $item`) && (`attributeExists "material" $item`))
+            {
+                //import shader
+                string $alembicName = `getAttr ($item+".alembicName")`;
+                string $newMaterial = `getAttr ($item+".material")`;
+                
+                $shaderPaths[`size $shaderPaths`] = ($alembicName+"."+$newMaterial);
+            
+                print ($newMaterial + "\n");
+            }
+
+            
+            //
+        }
+        string $shortShaderPath[] = `stringArrayRemoveDuplicates($shaderPaths)`;
+        for( $item in $shortShaderPath)
+        {
+            string $buffer[];
+            $numTokens = `tokenize $item "." $buffer`;
+            string $alembicName = $buffer[0];
+            string $newMaterial = $buffer[1];
+            //process namespaces
+            string $materialFilename = substituteAllString($newMaterial, ":", "_");
+            
+            $allNamespaces[`size $allNamespaces`] = ("TEMP"+$alembicName);
+            string $workspace = `workspace -q -fullName`;
+            file -import -type "mayaBinary"  -ignoreVersion -ra true -mergeNamespacesOnClash true -namespace ("TEMP"+$alembicName) -options "v=0;"  -pr ($workspace + "/renderData/alembicShaders/"+$alembicName+"/"+$alembicName+"_"+$materialFilename+".mb");
+        }
+        
+        //assign shader
+        for( $item in $sel)
+        {
+            if ((`attributeExists "alembicName" $item`) && (`attributeExists "material" $item`))
+            {
+                string $alembicName = `getAttr ($item+".alembicName")`;
+                string $newMaterial = `getAttr ($item+".material")`;
+                if($newMaterial != "initialShadingGroup")
+                {
+                    sets -e -forceElement (("TEMP"+$alembicName)+":"+$newMaterial) $item;
+                }
+                
+                
+            }
+        }
+        
+        
+        //remove namespace
+        string $shortNamespaces[] = `stringArrayRemoveDuplicates($allNamespaces)`;
+        for( $item in $shortNamespaces)
+        {
+            namespace -f -mv $item ":";
+            namespace -rm $item;
+        }
+        MLdeleteUnused();
+    }
+    else
+    {
+        warning ("nothing selected");
+    }
+}
+//abc_reassignShaders();

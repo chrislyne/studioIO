@@ -1,0 +1,163 @@
+//export animation
+
+global proc publishFile(string $path)
+{
+    //hide all shape nodes
+    string $allShapes[] = `ls -type "shape"`;
+    //for( $item in $allShapes)
+    //{
+    //    if (`getAttr -k ($item+".visibility")` == 1 && `getAttr -l ($item+".visibility")` == 0)
+    //  {
+    //      setAttr ($item+".visibility") 0;
+    //  }
+    //};
+    
+    //get workspace
+    string $workspace = `workspace -q -fullName`;
+    string $workspaceBuffer[];
+    clear $workspaceBuffer;
+    $numTokens2 = `tokenize $workspace "/" $workspaceBuffer`;
+    int $workspaceSize = `size $workspaceBuffer`+1;
+    
+    //get filename
+    string $filename = `file -q -sn`;
+    string $buffer[];
+    $numTokens = `tokenize $filename "/" $buffer`;
+    
+    //get relative path
+    string $relativePath = "";
+    for( $i=$workspaceSize; $i<(`size $buffer`-1); ++$i )
+    {
+        $relativePath += ($buffer[$i]+"/");
+    }
+    //published file name
+    string $publishName = "alembicTestSphere";
+    
+    string $exportString = "";
+    
+    float $startFrame = `playbackOptions -q -minTime`;
+    float $endFrame = `playbackOptions -q -maxTime`;
+    
+    //select hierarchy
+    string $grpSel[] = `ls -sl`;
+    select -hi $grpSel;
+    
+    string $shapeNodes[];
+    clear $shapeNodes;
+    
+    string $allParents[];
+    clear $allParents;
+    
+    string $sel[] = `ls -sl -l`;
+    if (`size $sel` > 0)
+    {
+        for( $item in $sel)
+        {
+            if(`objectType -isType "transform" $item` == 1)
+            {
+                string $rel[] = `listRelatives -s -f $item`;
+                if (`size ($rel)` > 0)
+                {
+                    string $SG[] = `listConnections -type "shadingEngine" $rel`;
+                    if (`size $SG` > 0)
+                    {
+                        string $relShapes[] = `listRelatives -s -f $item`;
+                        for ($shape in $relShapes)
+                        {
+                            $shapeNodes[`size $shapeNodes`] = $shape;
+                            //if (`getAttr -k ($item+".visibility")` == 1)
+                            //{
+                            //  setAttr ($item+".visibility") 1;
+                            //}
+                            string $longname[] = ls("-l", $item);
+                            string $tokens[];
+                            tokenize($longname[0], "|", $tokens);
+                            $allParents[`size $allParents`] = $tokens[0];
+                        }
+                    }
+                }
+            }
+        }
+    }
+    string $shorterAllParents[] = stringArrayRemoveDuplicates($allParents);
+    select -r $shorterAllParents;
+    for( $item in $shorterAllParents)
+        {
+            $exportString += (" -root "+$item);
+        }
+    string $folderPath = ($workspace+"/cache/alembic/"+$relativePath);
+    sysFile -makeDir $folderPath ;
+    //print ($workspace+"/cache/alembic/"+$relativePath+"/"+$path+".abc");
+    if (`exists AbcExport`) 
+    {
+        AbcExport -verbose -j ("-frameRange "+$startFrame+" "+$endFrame+" -attr material -attr alembicName -attr rsEnableSubdivision -attr rsMaxTessellationSubdivs -attr rsEnableDisplacement -attr rsMaxDisplacement -attr rsDisplacementScale -attr rsObjectId -attr castsShadows -attr receiveShadows -attr holdOut -attr primaryVisibility -attr smoothShading -attr visibleInReflections -attr visibleInRefractions -attr doubleSided -attr opposite -ro -uvWrite -wholeFrameGeo -worldSpace -writeUVSets -dataFormat ogawa"+$exportString+" -file \""+$workspace+"/cache/alembic/"+$relativePath+"/"+$path+".abc\"");
+    }
+    else
+    {
+        warning("AbcExport plugin not loaded");
+    }
+
+    
+    //unhide all shape nodes
+    for( $item in $allShapes)
+    {
+        //if (`getAttr -k ($item+".visibility")` == 1)
+        //{
+        //  setAttr ($item+".visibility") 1;
+        //}
+        
+      
+    };
+}
+
+//update name and run
+global proc CheckText()
+{
+   $publishName = `textField -q -text nameText`;
+   publishFile($publishName);
+}
+
+global proc abc_exportAnimation()
+{
+    if (`window -exists abcAnimationExportWindow`) deleteUI abcAnimationExportWindow;
+    window -w 300 -h 100 -title "abc Animation Export Window" abcAnimationExportWindow;
+        formLayout dauzerForm;
+             text -label "Publish Name" textLabel;
+             textField -w 250 nameText;
+             button -l "Publish" -h 50 -c ("CheckText()") dauzerButton1;
+             button -l "Close" -h 50 -c ("deleteUI abcAnimationExportWindow") dauzerButton2 ;
+        formLayout -edit
+             -af textLabel top 15
+             -af textLabel left 10 
+             -af nameText top 10
+             -ac nameText left 10 textLabel
+             -af nameText right 10 
+             -af dauzerButton1 bottom 0
+             -af dauzerButton1 left 0
+             -ap dauzerButton1 right 0 50
+             -af dauzerButton2 bottom 0
+             -ac dauzerButton2 left 0 dauzerButton1
+             -af dauzerButton2 right 0 
+
+    dauzerForm;
+    string $publishName = "";
+    
+    //get filename
+    string $filename = `file -q -sn -shn`;
+    string $buffer[];
+    $numTokens = `tokenize $filename "." $buffer`;
+    
+    //set text
+    string $sel[] = `ls -sl`;
+    string $selectionString = "";
+    for ($item in $sel)
+    {
+        string $fullNameSplit[];
+        $numTokens = `tokenize $item ":" $fullNameSplit`;
+        int $size = (`size $fullNameSplit`)-1;
+        $selectionString += ("_"+($fullNameSplit[$size]));
+    }
+    textField -edit -tx ($buffer[0]+$selectionString) nameText;
+    showWindow abcAnimationExportWindow;
+}
+//abc_exportAnimation();

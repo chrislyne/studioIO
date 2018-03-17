@@ -1,0 +1,157 @@
+//bake out redshift
+
+//rename duplicate geo
+global proc renameDuplicates()
+{
+  //Create a string-array to store the duplicates in
+  string $duplicateNames[];
+  //Get all of the transform-nodes in the scene
+  string $transformNodes[] = `ls -type transform`;
+  string $polyMeshes[] = `filterExpand -sm 12 $transformNodes`; //filters out all the non-polymesh nodes
+  
+  //Create a counter
+  int $counter = 0;
+  //For each object
+  for($node in $polyMeshes)
+  {
+    //If it's a duplicate object, put it in the variable for duplicates
+    if(`match "|" $node` == "|")
+    {
+      $duplicateNames[$counter] = $node;
+      $counter = $counter + 1;
+    }
+  }
+
+  //Reset the counter
+  $counter = 0;
+  //For each of the duplicate objects
+  for($duplicate in $duplicateNames)
+  {
+    //Tokenize the strings
+    string $nameBuffer[];
+    int $numTokens = `tokenize $duplicate "|" $nameBuffer`;
+    //For each of the tokens
+    for($a=0; $a < `size $nameBuffer`; $a++)
+    {
+      //Get the duplicates of the current token
+      string $dupToken[] = `ls ("*" + $nameBuffer[$a])`;
+      //Get the number of duplicates with the same name as tokenized
+      int $sizeToken = `size $dupToken`;
+      //If there's more than one object
+      if($sizeToken > 1)
+      {
+        //For each duplicate name
+        for($i=1; $i < $sizeToken; $i++)
+        {
+          $dupToken[$i] = `rename $dupToken[$i] ($nameBuffer[$a] + "_" + $i)`;
+          $counter = $counter + 1;
+        }
+      }
+    }
+  }
+}
+
+
+//create proxy material
+global proc string proxyShader(string $path)
+{	
+    //shader
+	string $proxyShader = `shadingNode -asShader lambert`;//create shader
+	string $proxyShaderSG = `sets -renderable true -noSurfaceShader true -empty -name ($proxyShader + "SG")`;//create shading engine
+	connectAttr -f ($proxyShader +".outColor") ($proxyShaderSG +".surfaceShader"); //connect shader to shading engine
+	setAttr ($proxyShader+".ambientColor") -type double3 1 1 1 ;
+    setAttr ($proxyShader+".diffuse") 0;
+    //texture
+	string $proxyTexture = `shadingNode -asTexture file`;
+	string $proxyPlace2d = `shadingNode -asUtility place2dTexture`;
+	connectAttr -f ($proxyPlace2d +".coverage") ($proxyTexture +".coverage");
+	connectAttr -f ($proxyPlace2d +".translateFrame ") ($proxyTexture +".translateFrame ");
+	connectAttr -f ($proxyPlace2d +".rotateFrame ") ($proxyTexture +".rotateFrame ");
+	connectAttr -f ($proxyPlace2d +".mirrorU ") ($proxyTexture +".mirrorU ");
+	connectAttr -f ($proxyPlace2d +".mirrorV ") ($proxyTexture +".mirrorV ");
+	connectAttr -f ($proxyPlace2d +".stagger ") ($proxyTexture +".stagger ");
+	connectAttr -f ($proxyPlace2d +".wrapU ") ($proxyTexture +".wrapU ");
+	connectAttr -f ($proxyPlace2d +".wrapV ") ($proxyTexture +".wrapV ");
+	connectAttr -f ($proxyPlace2d +".repeatUV ") ($proxyTexture +".repeatUV ");
+	connectAttr -f ($proxyPlace2d +".offset ") ($proxyTexture +".offset ");
+	connectAttr -f ($proxyPlace2d +".rotateUV ") ($proxyTexture +".rotateUV ");
+	connectAttr -f ($proxyPlace2d +".noiseUV ") ($proxyTexture +".noiseUV ");
+	connectAttr -f ($proxyPlace2d +".vertexUvOne ") ($proxyTexture +".vertexUvOne ");
+	connectAttr -f ($proxyPlace2d +".vertexUvTwo") ($proxyTexture +".vertexUvTwo");
+	connectAttr -f ($proxyPlace2d +".vertexUvThree") ($proxyTexture +".vertexUvThree");
+	connectAttr -f ($proxyPlace2d +".vertexCameraOne") ($proxyTexture +".vertexCameraOne");
+	connectAttr -f ($proxyPlace2d +".outUV ") ($proxyTexture +".uv");
+	connectAttr -f ($proxyPlace2d +".outUvFilterSize ") ($proxyTexture +".uvFilterSize");
+    
+	setAttr -type "string"  ($proxyTexture +".fileTextureName") ("sourceimages/baked/"+$path);//set path
+	
+	connectAttr -force ($proxyTexture +".outColor") ($proxyShader +".color");
+
+    return($proxyShaderSG);
+}
+global proc bakeRSShaders()
+{
+    renameDuplicates();
+    
+    //create light
+    file -import -type "mayaBinary"  -ignoreVersion -ra true -mergeNamespacesOnClash false -namespace "TEMPbakeLights" -options "v=0;"  -pr "renderData/lights/bakeLights.mb";
+
+    namespace -f -mv "TEMPbakeLights" ":";
+    namespace -rm "TEMPbakeLights";
+    
+    //set render globals
+    string $imageFilePrefix = `getAttr "defaultRenderGlobals.imageFilePrefix"`;
+    setAttr -type "string" "defaultRenderGlobals.imageFilePrefix" ("../sourceimages/baked/<Scene>_<Object>");
+    string $imageFormat = `getAttr "redshiftOptions.imageFormat"`;
+    setAttr "redshiftOptions.imageFormat" 0;
+    
+    //select meshes
+    string $transforms[] = `ls -tr`; //lists all the transform nodes in the scene
+    string $polyMeshes[] = `filterExpand -sm 12 $transforms`; //filters out all the non-polymesh nodes
+    string $visiblePolyMeshes[];
+    clear $visiblePolyMeshes;
+    
+    for ($item in $polyMeshes)
+    {
+        if(`getAttr ($item+".visibility")` == 1)
+        {
+            $visiblePolyMeshes[`size $visiblePolyMeshes`] = $item;
+            string $shapes[] = `listRelatives -s -path $item`;
+            for ($shape in $shapes)
+            {    
+                //remove smooths
+                displaySmoothness -divisionsU 0 -divisionsV 0 -pointsWire 4 -pointsShaded 1 -polygonObject 1 $shape;
+                setAttr ($shape+".rsEnableSubdivision") 0;
+                polySoftEdge -a 180 -ch 1 $shape;
+                //add shapes to bake set
+                sets -edit -forceElement  rsBakeSet1 $shape ;
+            }
+        }
+    }
+    //delete "locator1";
+    select -r $visiblePolyMeshes; //selects all the polymeshes
+    
+    //bake the bakeSet
+    rsRender -bake;
+    
+    //get file name
+    string $fileName = `file -q -sceneName -shn`;
+    string $nameParts[];
+    $token = `tokenize $fileName "." $nameParts`;
+    
+    //create shader
+    for( $item in $visiblePolyMeshes)
+    {
+        string $imageName = ($nameParts[0]+"_"+$item+".iff");
+        string $proxyShaderSG = proxyShader($imageName);
+        sets -e -forceElement $proxyShaderSG $item;
+    };
+    
+    //cleanup
+    setAttr -type "string" "defaultRenderGlobals.imageFilePrefix" ($imageFilePrefix);
+    delete bakeLights;
+    file -rename ($nameParts[0]+"_PRX.mb"); 
+    file -save;
+
+}
+//bakeRSShaders();
