@@ -5,26 +5,18 @@ global proc AddIcons(string $shelfName)
     string $separator = ( `about -nt` ) ? ";" : ":";
     tokenize( getenv("XBMLANGPATH"), $separator, $allparts );
     //copy icons
-    string $icons[] = {"abc_rndr.png","abc_publishModel.png","abc_reassignShader.png","abc_anim.png","abc_exportAnimation.png","abc_importAnimation.png","abc_exportCamera"};
+    string $icons[] = {"RSTessellate.png","RSObjectId.png","RSCameraBokeh.png"};
     for($item in $icons)
     {
-        string $srcWindows = ("Z:/Job_3/System/Deployment/mel/icons/"+$item);
+        string $srcWindows = ("icons/"+$item);
         string $destWindows = ($allparts[1]+"/"+$item);
         sysFile -copy $destWindows $srcWindows;
     }
     
     //add icons to shelf
-    shelfButton -rpt false -width 16 -height 34 -i1 "abc_UV.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
-    shelfButton -rpt true -i1 "exportForTexturing.png" -l "exportForTexturing" -c "source exportForTexturing;exportForTexturing;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    shelfButton -rpt false -width 16 -height 34 -i1 "abc_REF.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
-    shelfButton -rpt true -i1 "abc_publishModel.png" -l "abc_publishModel" -c "source abc_publishModel;abc_publishModel;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    shelfButton -rpt false -width 16 -height 34 -i1 "abc_anim.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
-    shelfButton -rpt true -i1 "abc_exportAnimation.png" -l "abc_exportAnimation" -c "source abc_exportAnimation;abc_exportAnimation;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    shelfButton -rpt true -i1 "abc_exportCamera.png" -l "abc_exportCamera" -c "source abc_exportCamera;abc_exportCamera;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    shelfButton -rpt false -width 16 -height 34 -i1 "abc_rndr.png" -enableBackground 0 -style "iconOnly" -marginWidth 0 -marginHeight 0 -p $shelfName;
-    shelfButton -rpt true -i1 "abc_importAnimation.png" -l "abc_importAnimation" -c "source abc_importAnimation;abc_importAnimation;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    shelfButton -rpt true -i1 "abc_reassignShader.png" -l "abc_reassignShader" -c "source abc_reassignShaders;abc_reassignShaders;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
-    
+    shelfButton -rpt true -i1 "RSTessellate.png" -l "RSTessellate" -c "source RSTessellate;RSTessellate;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt true -i1 "RSObjectId.png" -l "RSObjectId" -c "source RSObjectId;RSObjectId;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
+    shelfButton -rpt true -i1 "RSCameraBokeh.png" -l "RSCameraBokeh" -c "source RSCameraBokeh;RSCameraBokeh;" -mw 0 -mh 0 -w 34 -h 34 -p $shelfName;
     
 }
 
