@@ -8,7 +8,7 @@ global proc AddIcons(string $shelfName)
     string $icons[] = {"RSTessellate.png","RSObjectId.png","RSCameraBokeh.png"};
     for($item in $icons)
     {
-        string $srcWindows = ("icons/"+$item);
+        string $srcWindows = ("C:/Users/Admin/Documents/maya/scripts/IO/mel/icons/"+$item);
         string $destWindows = ($allparts[1]+"/"+$item);
         sysFile -copy $destWindows $srcWindows;
     }
@@ -27,7 +27,7 @@ global proc CheckText()
    AddIcons($shelfName);
 }
 
-global proc abc_install()
+global proc RSshelf_install()
 {
     if (`window -exists abcInstallWindow`) deleteUI abcInstallWindow;
     window -w 300 -h 100 -title "abc Install Window" abcInstallWindow;
